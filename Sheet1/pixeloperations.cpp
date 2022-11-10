@@ -402,7 +402,7 @@ QImage* doRobustAutomaticContrastAdjustment(QImage * image, double plow, double 
                 gruen = 255 - (11 * cb + 23 * cr) / 32 ;
                 blau = 255 + 113 * cb / 64 ;
             } else {
-                int newGray = (gray  - aslow) * scaleFactor + 0.5;
+                int newGray = (gray  - aslow) * scaleFactor + 0.0;
                 rot = newGray + 45 * cr / 32 ;
                 gruen = newGray - (11 * cb + 23 * cr) / 32 ;
                 blau = newGray + 113 * cb / 64;
