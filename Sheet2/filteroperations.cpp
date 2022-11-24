@@ -1,5 +1,6 @@
 #include "filteroperations.h"
 #include "imageviewer-qt5.h"
+#include "Helper.h"
 
 
 namespace cg2 {
@@ -28,56 +29,81 @@ QImage* filterImage(QImage * image, int**& filter, int filter_width, int filter_
 
     QImage* copyImage =new QImage(*image);
 
-    double weight = 1.0/((filter_width)*(filter_height));
+    int sumFilter = 0;
+    for (int i=0; i<filter_width; i++) {
+        for (int j=0; j<filter_height; j++) {
+            sumFilter+=filter[i][j];
+        }
+    }
+
+    double weight = 1.0/sumFilter;
     int L = (filter_height/2);
     int K = (filter_width/2);
     int imageHeight = image->height();
     int imageWidth = image->width();
 
     logFile << "Filter read:" << std::endl;
-    for(int i=L;i<image->width()-L;i++){
-        for(int j=K;j<image->height()-K;j++){
+
+    int border_i, border_j;
+
+    // Zentralbereich
+    if (border_treatment == 0) {
+        border_i = L;
+        border_j = K;
+    } else {
+        border_i = 0;
+        border_j = 0;
+    }
+
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
             QRgb pixel;
-            double sumGray = 0;
-            double sumCb = 0;
-            double sumCr = 0;
+            int sumGray = 0;
+            int sumCb = 0;
+            int sumCr = 0;
 
             for(int v = -L; v <= L; v++ ){
                 for(int u = -K; u <= K; u++ ){
+                    int xPos = i+v;
+                    int yPos = j+u;
+                    if (i+v < 0 || i+v >= imageWidth || j+u < 0 || j+u >= imageHeight) {
+                        // zero padding: if index out of bounce then skip and use gray, cb, cr = 0
+                        if (border_treatment == 1)
+                            continue;
+                        // Konstante Randbehandlung
+                        else if (border_treatment == 2) {
+                            if (i+v < 0)
+                                xPos = 0;
+                            else if (i+v >= imageWidth)
+                                xPos = imageWidth - 1;
 
-                    if (((i + v) < 0) || ((i + v) > imageWidth)  || ((j + u) < 0) || ((j + u) > imageHeight)) {
-                        sumCb = sumCb + (-128)*filter[v + L][u + K];
-                        sumCr = sumCr + (-128)*filter[v + L][u + K];
-                        continue;
+                            if (j+u < 0)
+                                yPos = 0;
+                            if (j+u >= imageHeight)
+                                yPos = imageHeight - 1;
+                        }
+                        // Gespiegelte Randbehandlung
+                        else if (border_treatment == 3) {
+                            if (i+v < 0)
+                                xPos = i - v;
+                            else if (i+v >= imageWidth)
+                                xPos = i - v;
+
+                            if (j+u < 0)
+                                yPos = j - u;
+                            if (j+u >= imageHeight)
+                                yPos = j - u;
+                        }
                     }
-                    pixel = copyImage->pixel(i+v, j+u);
+                    pixel = copyImage->pixel(xPos, yPos);
 
                     int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
                     int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
                     int cr = 0.5*qRed(pixel) + -0.419*qGreen(pixel) - 0.08*qBlue(pixel);
 
-                    if (gray > 255) {
-                        gray = 255;
-                    }
-                    if (gray < 0) {
-                        gray = 0;
-                    }
-
-                    if (cb  < -128) {
-                        cb = -128;
-                    }
-
-                    if (cb > 127) {
-                        cb = 127;
-                    }
-
-                    if (cr  < -128) {
-                        cr = -128;
-                    }
-
-                    if (cr > 127) {
-                        cr = 127;
-                    }
+                    clamping0_255(gray);
+                    clamping_minus128_127(cb);
+                    clamping_minus128_127(cr);
 
                     sumGray = sumGray + gray*filter[v + L][u + K];
                     sumCb = sumCb + cb*filter[v + L][u + K];
@@ -90,70 +116,17 @@ QImage* filterImage(QImage * image, int**& filter, int filter_width, int filter_
             int newCb = (int) round((double)sumCb * weight);
             int newCr = (int) round((double)sumCr * weight);
 
-            if (newGray < 0) {
-                newGray = 0;
-            }
-
-            if (newGray > 255) {
-                newGray = 255;
-            }
-
-            if (newCb  < -128) {
-                newCb = -128;
-            }
-
-            if (newCb > 127) {
-                newCb = 127;
-            }
-
-            if (newCr  < -128) {
-                newCr = -128;
-            }
-
-            if (newCr > 127) {
-                newCr = 127;
-            }
+            clamping0_255(newGray);
+            clamping_minus128_127(newCb);
+            clamping_minus128_127(newCr);
 
             int rot = newGray + 45 * newCr / 32 ;
             int gruen = newGray - (11 * newCb + 23 * newCr) / 32 ;
             int blau = newGray + 113 * newCb / 64 ;
 
-            if (rot > 255) {
-                rot = 255;
-            }
-            if (rot < 0)  {
-                rot  = 0;
-            }
-            if (gruen > 255) {
-                gruen = 255;
-            }
-            if (gruen < 0)  {
-                gruen  = 0;
-            }
-            if (blau > 255) {
-                blau = 255;
-            }
-            if (blau < 0)  {
-                blau  = 0;
-            }
-            if (rot > 255) {
-                rot = 255;
-            }
-            if (rot < 0)  {
-                rot  = 0;
-            }
-            if (gruen > 255) {
-                gruen = 255;
-            }
-            if (gruen < 0)  {
-                gruen  = 0;
-            }
-            if (blau > 255) {
-                blau = 255;
-            }
-            if (blau < 0)  {
-                blau  = 0;
-            }
+            clamping0_255(rot);
+            clamping0_255(gruen);
+            clamping0_255(blau);
 
             image->setPixel(i, j, qRgb(rot,gruen,blau));
         }
@@ -198,153 +171,187 @@ QImage* filterImage(QImage * image, int**& filter, int filter_width, int filter_
      */
 QImage* filterGauss2D(QImage * image, double gauss_sigma, int border_treatment){
 
+
     // create the kernel h
     int center = (int) (3.0 * gauss_sigma);
-    float[] h = new float[2*center+1]; // odd size
+    int h[2*center+1] = {}; // odd size
 
     //fill the kernel
-    double gauss_sigma2 = gauss_sigma * gauss_sigma;
+    float gauss_sigma2 = gauss_sigma * gauss_sigma;
 
-    for (int i=0; i<h.length; i++) {
-        double r = center - i;
-        h[i] = (float) exp(-0.5*(r*r)/gauss_sigma2);
+    int h_len = sizeof(h)/sizeof(float);
+    int  h_len_half = h_len/2;
+
+
+    float scaleFactor = exp(-0.5*(center*center)/gauss_sigma2);
+
+    for (int i = 0; i < h_len; i++) {
+        int r = center - i;
+        h[i] = (int)(exp(-0.5*(r*r)/gauss_sigma2)/scaleFactor);
     }
 
-
+    int sumGaussFilter = 0.0;
+    for (int i=0; i<h_len; i++) {
+        sumGaussFilter+= h[i];
+    }
     //  we have to iterate through h and ddetermine the length and set it to weight
     QImage* copyImage =new QImage(*image);
 
-    int gauss_array_len_half = (h.length/2);
-    double weight = 1.0/(gauss_array_len_half);
+
+
+    float weight = 1.0/(sumGaussFilter);
 
     int imageHeight = image->height();
     int imageWidth = image->width();
 
-    for(int i=L;i<image->width()-L;i++){
-        for(int j=K;j<image->height()-K;j++){
+    int border_i, border_j;
+
+
+    // Zentralbereich
+    if (border_treatment == 0) {
+        border_i = h_len_half;
+        border_j = h_len_half;
+    } else {
+        border_i = 0;
+        border_j = 0;
+    }
+
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
             QRgb pixel;
-            double sumGray = 0;
-            double sumCb = 0;
-            double sumCr = 0;
+            int sumGray = 0;
+            int sumCb = 0;
+            int sumCr = 0;
 
-            for(int v = ; v <= L; v++ ){
-
-            }
-
-
-            for(int v = -L; v <= L; v++ ){
-                for(int u = -K; u <= K; u++ ){
-
-                    if (((i + v) < 0) || ((i + v) > imageWidth)  || ((j + u) < 0) || ((j + u) > imageHeight)) {
-                        sumCb = sumCb + (-128)*filter[v + L][u + K];
-                        sumCr = sumCr + (-128)*filter[v + L][u + K];
+            for(int v = -h_len_half; v <= h_len_half; v++ ){
+                int xPos = i + v;
+                int yPos = j;
+                if (i+v < 0 || i+v >= imageWidth || j < 0 || j >= imageHeight) {
+                    // zero padding: if index out of bounce then skip and use gray, cb, cr = 0
+                    if (border_treatment == 1)
                         continue;
+                    // Konstante Randbehandlung
+                    else if (border_treatment == 2) {
+                        if (i+v < 0)
+                            xPos = 0;
+                        else if (i+v >= imageWidth)
+                            xPos = imageWidth - 1;
+
+                        if (j < 0)
+                            yPos = 0;
+                        if (j >= imageHeight)
+                            yPos = imageHeight - 1;
                     }
+                    // Gespiegelte Randbehandlung
+                    else if (border_treatment == 3) {
+                        if (i+v < 0)
+                            xPos = i - v;
+                        else if (i+v >= imageWidth)
+                            xPos = i - v;
 
-                    pixel = copyImage->pixel(i+v, j+u);
-
-                    int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
-                    int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
-                    int cr = 0.5*qRed(pixel) + -0.419*qGreen(pixel) - 0.08*qBlue(pixel);
-
-                    if (gray > 255) {
-                        gray = 255;
+                        if (j < 0)
+                            yPos = j;
+                        if (j >= imageHeight)
+                            yPos = j;
                     }
-                    if (gray < 0) {
-                        gray = 0;
-                    }
-
-                    if (cb  < -128) {
-                        cb = -128;
-                    }
-
-                    if (cb > 127) {
-                        cb = 127;
-                    }
-
-                    if (cr  < -128) {
-                        cr = -128;
-                    }
-
-                    if (cr > 127) {
-                        cr = 127;
-                    }
-
-                    sumGray = sumGray + gray*filter[v + L][u + K];
-                    sumCb = sumCb + cb*filter[v + L][u + K];
-                    sumCr = sumCr + cr*filter[v + L][u + K];
-
                 }
-            }
+                pixel = copyImage->pixel(xPos, yPos);
 
+                int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
+                int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
+                int cr = 0.5*qRed(pixel) + -0.419*qGreen(pixel) - 0.08*qBlue(pixel);
+
+                clamping0_255(gray);
+                clamping_minus128_127(cb);
+                clamping_minus128_127(cr);
+
+                sumGray = sumGray + gray*h[v + h_len_half];
+                sumCb = sumCb + cb*h[v + h_len_half];
+                sumCr = sumCr + cr*h[v + h_len_half];
+            }
             int newGray = (int) round((double)sumGray * weight);
             int newCb = (int) round((double)sumCb * weight);
             int newCr = (int) round((double)sumCr * weight);
 
-            if (newGray < 0) {
-                newGray = 0;
-            }
+            clamping0_255(newGray);
+            clamping_minus128_127(newCb);
+            clamping_minus128_127(newCr);
 
-            if (newGray > 255) {
-                newGray = 255;
-            }
+            int rot = newGray + 45 * (double)newCr / 32 ;
+            int gruen = newGray - (double)(11 * (double)newCb + 23 * (double)newCr) / 32 ;
+            int blau = (double)newGray + 113 * (double)newCb / 64 ;
 
-            if (newCb  < -128) {
-                newCb = -128;
-            }
+            clamping0_255(rot);
+            clamping0_255(gruen);
+            clamping0_255(blau);
 
-            if (newCb > 127) {
-                newCb = 127;
-            }
+            image->setPixel(i, j, qRgb(newGray,newGray,newGray));
 
-            if (newCr  < -128) {
-                newCr = -128;
-            }
+            sumGray = 0;
+            sumCb = 0;
+            sumCr = 0;
 
-            if (newCr > 127) {
-                newCr = 127;
-            }
+            for(int u = -h_len_half; u <= h_len_half; u++ ){
+                int xPos = i;
+                int yPos = j + u;
+                if (i < 0 || i >= imageWidth || j+u < 0 || j+u >= imageHeight) {
+                    // zero padding: if index out of bounce then skip and use gray, cb, cr = 0
+                    if (border_treatment == 1)
+                        continue;
+                    // Konstante Randbehandlung
+                    else if (border_treatment == 2) {
+                        if (i < 0)
+                            xPos = 0;
+                        else if (i >= imageWidth)
+                            xPos = imageWidth - 1;
 
-            int rot = newGray + 45 * newCr / 32 ;
-            int gruen = newGray - (11 * newCb + 23 * newCr) / 32 ;
-            int blau = newGray + 113 * newCb / 64 ;
+                        if (j+u < 0)
+                            yPos = 0;
+                        if (j+u >= imageHeight)
+                            yPos = imageHeight - 1;
+                    }
+                    // Gespiegelte Randbehandlung
+                    else if (border_treatment == 3) {
+                        if (i < 0)
+                            xPos = i;
+                        else if (i >= imageWidth)
+                            xPos = i;
 
-            if (rot > 255) {
-                rot = 255;
+                        if (j+u < 0)
+                            yPos = j - u;
+                        if (j+u >= imageHeight)
+                            yPos = j - u;
+                    }
+                }
+                pixel = copyImage->pixel(xPos, yPos);
+
+                int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
+                int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
+                int cr = 0.5*qRed(pixel) + -0.419*qGreen(pixel) - 0.08*qBlue(pixel);
+
+                clamping0_255(gray);
+                clamping_minus128_127(cb);
+                clamping_minus128_127(cr);
+
+                sumGray = sumGray + gray*h[u + h_len_half];
+                sumCb = sumCb + cb*h[u + h_len_half];
+                sumCr = sumCr + cr*h[u + h_len_half];
             }
-            if (rot < 0)  {
-                rot  = 0;
-            }
-            if (gruen > 255) {
-                gruen = 255;
-            }
-            if (gruen < 0)  {
-                gruen  = 0;
-            }
-            if (blau > 255) {
-                blau = 255;
-            }
-            if (blau < 0)  {
-                blau  = 0;
-            }
-            if (rot > 255) {
-                rot = 255;
-            }
-            if (rot < 0)  {
-                rot  = 0;
-            }
-            if (gruen > 255) {
-                gruen = 255;
-            }
-            if (gruen < 0)  {
-                gruen  = 0;
-            }
-            if (blau > 255) {
-                blau = 255;
-            }
-            if (blau < 0)  {
-                blau  = 0;
-            }
+            newGray = (int) round((double)sumGray * weight);
+            newCb = (int) round((double)sumCb * weight);
+            newCr = (int) round((double)sumCr * weight);
+
+            clamping0_255(newGray);
+            clamping_minus128_127(newCb);
+            clamping_minus128_127(newCr);
+
+            rot = newGray + 45 * (double)newCr / 32 ;
+            gruen = newGray - (double)(11 * (double)newCb + 23 * (double)newCr) / 32 ;
+            blau = (double)newGray + 113 * (double)newCb / 64 ;
+
+            clamping0_255(rot);
+            clamping0_255(gruen);
+            clamping0_255(blau);
 
             image->setPixel(i, j, qRgb(rot,gruen,blau));
         }
@@ -366,8 +373,7 @@ QImage* filterGauss2D(QImage * image, double gauss_sigma, int border_treatment){
         logFile << "Gespiegelte Randbedingung" << std::endl;
         break;
     }
-    return image;
+    return image;;
 }
-
 }
 

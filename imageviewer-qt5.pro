@@ -2,6 +2,7 @@ QT += widgets
 qtHaveModule(printsupport): QT += printsupport
 
 HEADERS       = imageviewer-qt5.h \
+    Helper.h \
     Sheet1/pixeloperations.h \
     Sheet2/filteroperations.h \
     Sheet3/edgefilter.h \
@@ -13,6 +14,7 @@ HEADERS       = imageviewer-qt5.h \
     GUI/fourierlabel.h \
     GUI/tabs.h
 SOURCES       = imageviewer-qt5.cpp \
+                Helper.cpp \
                 Sheet1/pixeloperations.cpp \
                 Sheet2/filteroperations.cpp \
                 Sheet3/edgefilter.cpp \
