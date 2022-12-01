@@ -179,7 +179,7 @@ QImage* filterGauss2D(QImage * image, double gauss_sigma, int border_treatment){
     //fill the kernel
     float gauss_sigma2 = gauss_sigma * gauss_sigma;
 
-    int h_len = sizeof(h)/sizeof(float);
+    int h_len = sizeof(h)/sizeof(int);
     int  h_len_half = h_len/2;
 
 
@@ -373,7 +373,7 @@ QImage* filterGauss2D(QImage * image, double gauss_sigma, int border_treatment){
         logFile << "Gespiegelte Randbedingung" << std::endl;
         break;
     }
-    return image;;
+    return image;
 }
 }
 
