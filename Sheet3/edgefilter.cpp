@@ -28,23 +28,26 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
 
     QImage* copyImageX =new QImage(*image);
     QImage* copyImageY =new QImage(*image);
+    QImage* copyImage =new QImage(*image);
 
     int sum = 0;
-    for (int i=0; i<(sizeof(derivative_filter)/sizeof(int)); i++) {
+    // +1 because sizeof() is broken
+    for (int i=0; i<(sizeof(derivative_filter)/sizeof(int))+1; i++) {
         sum+= abs(derivative_filter[i]);
     }
     float weight_derivative_filter = 1.0/(sum);
 
     sum = 0;
-    for (int j=0; j<(sizeof(smoothing_filter)/sizeof(int)); j++) {
+    // +1 because sizeof() is broken
+    for (int j=0; j<(sizeof(smoothing_filter)/sizeof(int))+1; j++) {
         sum+= abs(smoothing_filter[j]);
     }
     float weight_smoothing_filter = 1.0/(sum);
 
     int border_i, border_j;
 
-    int derivative_len_half  = sizeof(derivative_filter)/(sizeof(int)*2); // because  derivative and smothing filter have same length, we dont have to store another variable with smoothing filter half filter length
-
+    // because  derivative and smothing filter have same length, we dont have to store another variable with smoothing filter half filter length
+    int derivative_len_half  = sizeof(derivative_filter)/(sizeof(int)*2);
     // Zentralbereich
     border_i = derivative_len_half;
     border_j = derivative_len_half;
@@ -132,8 +135,7 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
             clamping0_255(gruen);
             clamping0_255(blau);
 
-            copyImageX->setPixel(i, j, qRgb(rot,gruen,blau));
-
+            copyImage->setPixel(i, j, qRgb(rot,gruen,blau));
 
 
             // Derivative and smoothing in y dirction
@@ -215,17 +217,32 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
             clamping0_255(gruen);
             clamping0_255(blau);
 
-            copyImageY->setPixel(i, j, qRgb(rot,gruen,blau));
+            image->setPixel(i, j, qRgb(rot,gruen,blau));
         }
     }
+
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
+            QRgb pixel = image->pixel(i, j);
+            copyImageY->setPixel(i, j, pixel);
+        }
+    }
+
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
+            QRgb pixel = copyImage->pixel(i, j);
+            copyImageX->setPixel(i, j, pixel);
+        }
+    }
+
+
 
     // here is the problem, how exactly do I apply the norm to the pixels in the picture?
     for(int i = border_i; i < image->width() - border_i; i++){
         for(int j = border_j; j < image->height() - border_j; j++){
             QRgb pixel = image->pixel(i, j);
             float norm = sqrt(pow(copyImageX->pixel(i, j), 2) + pow(copyImageY->pixel(i, j), 2));
-            int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
-            int newGray = gray * norm;
+            int newGray =   norm;
             clamping0_255(newGray);
             image->setPixel(i, j, qRgb(newGray, newGray, newGray));
         }
