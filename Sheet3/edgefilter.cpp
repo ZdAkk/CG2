@@ -26,9 +26,9 @@ namespace cg2 {
      */
 QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_filter, int desired_image){
 
-    QImage* copyImageX =new QImage(*image);
-    QImage* copyImageY =new QImage(*image);
-    QImage* copyImage =new QImage(*image);
+    QImage* temp =new QImage(*image);
+    QImage* xCopy =new QImage(*image);
+    QImage* yCopy =new QImage(*image);
 
     int sum = 0;
     // +1 because sizeof() is broken
@@ -52,24 +52,35 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
     border_i = derivative_len_half;
     border_j = derivative_len_half;
 
+    QRgb pixel;
+    int sumGray = 0;
+    int sumCb = 0;
+    int sumCr = 0;
+
+    int gray = 0;
+    int cb = 0;
+    int cr = 0;
+
+    int newGray = 0;
+    int newCb = 0;
+    int newCr = 0;
+
+    int rot = 0;
+    int gruen = 0;
+    int blau = 0;
+
     for(int i = border_i; i < image->width() - border_i; i++){
         for(int j = border_j; j < image->height() - border_j; j++){
-
-            // Derivative and smoothing in x direction
-            QRgb pixel;
-            int sumGray = 0;
-            int sumCb = 0;
-            int sumCr = 0;
-
+            // Derivative calculation in x direction
             for(int v = -derivative_len_half; v <= derivative_len_half; v++ ){
                 int xPos = i + v;
                 int yPos = j;
 
                 pixel = image->pixel(xPos, yPos);
 
-                int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
-                int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
-                int cr = 0.5*qRed(pixel) + -0.419*qGreen(pixel) - 0.08*qBlue(pixel);
+                gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
+                cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
+                cr = 0.5*qRed(pixel) + -0.419*qGreen(pixel) - 0.08*qBlue(pixel);
 
                 clamping0_255(gray);
                 clamping_minus128_127(cb);
@@ -79,24 +90,31 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
                 sumCb = sumCb + cb*derivative_filter[v + derivative_len_half];
                 sumCr = sumCr + cr*derivative_filter[v + derivative_len_half];
             }
-            int newGray = (int) round((double)sumGray * weight_derivative_filter);
-            int newCb = (int) round((double)sumCb * weight_derivative_filter);
-            int newCr = (int) round((double)sumCr * weight_derivative_filter);
 
-            clamping0_255(newGray);
+            newGray = (int) round((double)sumGray * weight_derivative_filter);
+            newCb = (int) round((double)sumCb * weight_derivative_filter);
+            newCr = (int) round((double)sumCr * weight_derivative_filter);
+
+            clamping_minus128_127(newGray);
             clamping_minus128_127(newCb);
             clamping_minus128_127(newCr);
 
-            int rot = newGray + 45 * (double)newCr / 32 ;
-            int gruen = newGray - (double)(11 * (double)newCb + 23 * (double)newCr) / 32 ;
-            int blau = (double)newGray + 113 * (double)newCb / 64 ;
+            newGray+=127;
+
+            rot = newGray + 45 * (double)newCr / 32 ;
+            gruen = newGray - (double)(11 * (double)newCb + 23 * (double)newCr) / 32 ;
+            blau = newGray + 113 * (double)newCb / 64 ;
 
             clamping0_255(rot);
             clamping0_255(gruen);
             clamping0_255(blau);
 
-            copyImageX->setPixel(i, j, qRgb(rot,gruen,blau));
-
+            temp->setPixel(i, j, qRgb(rot,gruen,blau));
+        }
+    }
+    // Smoothing in y direction
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
             sumGray = 0;
             sumCb = 0;
             sumCr = 0;
@@ -105,7 +123,7 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
                 int xPos = i;
                 int yPos = j + u;
 
-                pixel = copyImageX->pixel(xPos, yPos);
+                pixel = temp->pixel(xPos, yPos);
 
                 int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
                 int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
@@ -135,10 +153,13 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
             clamping0_255(gruen);
             clamping0_255(blau);
 
-            copyImage->setPixel(i, j, qRgb(rot,gruen,blau));
+            xCopy->setPixel(i, j, qRgb(rot,gruen,blau));
+        }
+    }
+    // Smoothing in x direction
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
 
-
-            // Derivative and smoothing in y dirction
             sumGray = 0;
             sumCb = 0;
             sumCr = 0;
@@ -177,7 +198,12 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
             clamping0_255(gruen);
             clamping0_255(blau);
 
-            copyImageY->setPixel(i, j, qRgb(rot,gruen,blau));
+            temp->setPixel(i, j, qRgb(rot,gruen,blau));
+        }
+    }
+    // Derivative calculation in y direction
+    for(int i = border_i; i < image->width() - border_i; i++){
+        for(int j = border_j; j < image->height() - border_j; j++){
 
             sumGray = 0;
             sumCb = 0;
@@ -187,7 +213,7 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
                 int xPos = i;
                 int yPos = j + u;
 
-                pixel = copyImageY->pixel(xPos, yPos);
+                pixel = temp->pixel(xPos, yPos);
 
                 int gray = 0.299*qRed(pixel) + 0.587*qGreen(pixel) + 0.114*qBlue(pixel);
                 int cb = -0.169*qRed(pixel) + -0.331*qGreen(pixel) + 0.5*qBlue(pixel);
@@ -205,9 +231,11 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
             newCb = (int) round((double)sumCb * weight_derivative_filter);
             newCr = (int) round((double)sumCr * weight_derivative_filter);
 
-            clamping0_255(newGray);
+            clamping_minus128_127(newGray);
             clamping_minus128_127(newCb);
             clamping_minus128_127(newCr);
+
+            newGray+=127;
 
             rot = newGray + 45 * (double)newCr / 32 ;
             gruen = newGray - (double)(11 * (double)newCb + 23 * (double)newCr) / 32 ;
@@ -217,37 +245,42 @@ QImage* doEdgeFilter(QImage * image, int*& derivative_filter, int*& smoothing_fi
             clamping0_255(gruen);
             clamping0_255(blau);
 
-            image->setPixel(i, j, qRgb(rot,gruen,blau));
+            yCopy->setPixel(i, j, qRgb(rot,gruen,blau));
         }
     }
 
-    for(int i = border_i; i < image->width() - border_i; i++){
-        for(int j = border_j; j < image->height() - border_j; j++){
-            QRgb pixel = image->pixel(i, j);
-            copyImageY->setPixel(i, j, pixel);
-        }
-    }
+    //                for(int i = border_i; i < image->width() - border_i; i++){
+    //                    for(int j = border_j; j < image->height() - border_j; j++){
+    //                        QRgb pixel = image->pixel(i, j);
+    //                        copyImageY->setPixel(i, j, pixel);
+    //                    }
+    //                }
 
-    for(int i = border_i; i < image->width() - border_i; i++){
-        for(int j = border_j; j < image->height() - border_j; j++){
-            QRgb pixel = copyImage->pixel(i, j);
-            copyImageX->setPixel(i, j, pixel);
-        }
-    }
+    //                for(int i = border_i; i < image->width() - border_i; i++){
+    //                    for(int j = border_j; j < image->height() - border_j; j++){
+    //                        QRgb pixel = copyImage->pixel(i, j);
+    //                        copyImageX->setPixel(i, j, pixel);
+    //                    }
+    //                }
 
 
 
     // here is the problem, how exactly do I apply the norm to the pixels in the picture?
     for(int i = border_i; i < image->width() - border_i; i++){
         for(int j = border_j; j < image->height() - border_j; j++){
-            QRgb pixel = image->pixel(i, j);
-            float norm = sqrt(pow(copyImageX->pixel(i, j), 2) + pow(copyImageY->pixel(i, j), 2));
-            int newGray =   norm;
-            clamping0_255(newGray);
-            image->setPixel(i, j, qRgb(newGray, newGray, newGray));
+            QRgb xDerivativePixel = xCopy->pixel(i, j);
+            QRgb yDerivativePixel = yCopy->pixel(i, j);
+            int grayX = 0.299*qRed(xDerivativePixel) + 0.587*qGreen(xDerivativePixel) + 0.114*qBlue(xDerivativePixel);
+            int grayY = 0.299*qRed(yDerivativePixel) + 0.587*qGreen(yDerivativePixel) + 0.114*qBlue(yDerivativePixel);
+
+            int norm = sqrt(pow(grayX,  2) + pow(grayY, 2));
+            clamping0_255(norm);
+            image->setPixel(i, j, qRgb(norm, norm, norm));
         }
     }
-
+    delete xCopy;
+    delete yCopy;
+    delete temp;
     logFile << "EdgeFilter applied:" << std::endl;
     logFile << "---derivative_filter: " << derivative_filter[0] << "|"<< derivative_filter[1] << "|" << derivative_filter[2]  << std::endl;
     logFile << "---smoothing_filter: " << smoothing_filter[0] << "|"<< smoothing_filter[1] << "|" << smoothing_filter[2]  << std::endl;
